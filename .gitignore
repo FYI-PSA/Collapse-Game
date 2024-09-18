@@ -112,3 +112,12 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Pyright configurations
+pyproject.toml
+pyrightconfig.json
+
+# Flake8 configurations
+.flake8
+tox.ini
+setup.cfg
