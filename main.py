@@ -25,12 +25,20 @@ class GameLogic:
         else:
             self.board: List[List[int]] = [[0 for j in range(coloumns)] for i in range(rows)]
 
+        self.board_size: Tuple[int, int] = (self.rows, self.coloumns)
+
         self.first_move_white: bool = True
         self.first_move_black: bool = True
 
         self.white_turn: bool = True
         # True for the first person's turn
         # False for the second person's turn
+
+        self.next_autotick: bool = False
+        # If a piece has reached 4 and will explode next frame
+
+        self.four_pieces: List[Tuple[int, int]] = []
+        # A list of all pieces that have reached 4
 
         self.white_pieces: List[Tuple[int, int]] = []
         self.black_pieces: List[Tuple[int, int]] = []
@@ -43,9 +51,12 @@ class GameLogic:
     def get_board(self) -> List[List[int]]:
         return self.board
 
+    def get_board_size(self) -> Tuple[int, int]:
+        return self.board_size
+
     def get_whites(self) -> List[Tuple[int, int]]:
         return self.white_pieces
-    
+
     def get_blacks(self) -> List[Tuple[int, int]]:
         return self.black_pieces
 
@@ -72,20 +83,21 @@ class GameLogic:
             return False
 
         if self.white_turn:
-            pass
+            return position in self.white_pieces
         else:
-            pass
+            return position in self.black_pieces
 
-        self.white_turn = not self.white_turn  # Toggles between True and False
-        return True
-
-    def do_valid_move(self, get_input_method: Callable):
-        pos: Tuple[int, int] = get_input_method()
+    def do_valid_move(self, get_input_method: Callable) -> None:
+        # get_input_method needs to accept a parameter
+        # that shows if it's the first time asking or second time
+        if self.next_autotick:
+            self._spread()
+        pos: Tuple[int, int] = get_input_method(0)
         while not self.is_valid_move(pos):
-            pos = get_input_method()
+            pos = get_input_method(1)
         self._do_move(pos)
 
-    def _do_move(self, position: Tuple[int, int]):
+    def _do_move(self, position: Tuple[int, int]) -> None:
         if self.first_move_white:
             self.board[position[0]][position[1]] = 3
             self.white_pieces.append(position)
@@ -95,7 +107,53 @@ class GameLogic:
             self.black_pieces.append(position)
             self.first_move_black = False
         else:
-            print(" not implemented yet ")
+            self.board[position[0]][position[1]] = 4
+            self.next_autotick = True
+            self.four_pieces.append(position)
+            return
+
+        self.white_turn = not self.white_turn  # Toggles between True and False
+
+    def _spread(self) -> None:
+        # +1 c   + 1
+        # -1 r   + 1
+        # + 1 r  + 1
+        # - 1 c  + 1
+        # Based on my references, even if a piece is 3 and has 2 others collapse into it,
+        # it can at most turn into a four and explode like normal
+        for piece in self.four_pieces:
+            r: int = piece[0]
+            c: int = piece[1]
+
+            # up
+            r_1 = r + 1
+            c_1 = c
+            if r_1 < 0 or r_1 >= self.rows:
+                continue
+            pass
+
+            # down
+            r_2 = r - 1
+            c_2 = c
+            if r_2 < 0 or r_2 >= self.rows:
+                continue
+            pass
+
+            # left
+            r_3 = r
+            c_3 = c - 1
+            if c_3 < 0 or c_3 >= self.coloumns:
+                continue
+            pass
+
+            # right
+            r_4 = r
+            c_4 = c + 1
+            if c_4 < 0 or c_4 >= self.coloumns:
+                continue
+            pass
+
+        pass
 
 
 class GameBox:
@@ -105,31 +163,39 @@ class GameBox:
         self.rows: int = rows
         self.coloumns: int = coloumns
         self._ALPHABET_NAMING: List[str] = [chr(alpha) for alpha in range(ord('A'), ord('A')+rows)]
-        self.WHITE_PIECES: List[str] = ['1', '2', '3', '4']
-        self.BLACK_PIECES: List[str] = ['一', '二', '三', '四']
+        self.WHITE_PIECES: List[str] = [' I ', 'I I', 'III', 'I V']
+        # self.BLACK_PIECES: List[str] = [' ⚀ ', ' ⚁ ', ' ⚂ ', ' ⚃ ']
+        self.BLACK_PIECES: List[str] = ['一 ', '二 ', '三 ', '四 ']
         return
 
-    def draw(self, gameboard: List[List[int]], white_pieces: List[Tuple[int, int]], black_pieces: List[Tuple[int, int]]) -> bool:
+    def draw(self, gameboard: List[List[int]], white_pieces: List[Tuple[int, int]], black_pieces: List[Tuple[int, int]], board_size: Tuple[int, int]) -> bool:
         try:
-            board_shape: tp.ArrayLike = np.shape(np.array(gameboard))
-            if (self.rows, self.coloumns) != tuple(board_shape):
+            if (self.rows, self.coloumns) != board_size:
                 print(" BOARD DOESN'T MATCH WITH PROVIDED SIZES FOR THIS CLASS ")
                 raise IndexError
-            numberings: List[str] = [str(i+1) for i in range(0, board_shape[0])]
+            numberings: List[str] = []
+            for num in range(0, board_size[0]):
+                n: str = str(num + 1)
+                l: int = len(n)
+                if l == 1:
+                    n = ' ' + n + ' '
+                elif l == 2:
+                    n = n[0] + ' ' + n[1]
+                numberings.append(n)
             first_line: str = self.spaces + "X" + self.spaces + "|" + self.spaces + self.spaces.join(numberings)
             print(first_line)
             print('-'*len(first_line))
             for row_i, row in enumerate(gameboard):
                 print(self.spaces + self._ALPHABET_NAMING[row_i] + self.spaces + "|" + self.spaces, end='')
                 for coloumn_i, item in enumerate(row):
-                    draw_element: str = 'O'
+                    draw_element: str = ' O '
                     your_i: Tuple[int, int] = (row_i, coloumn_i)
                     if your_i in white_pieces:
                         draw_element = self.WHITE_PIECES[item-1]
                     elif your_i in black_pieces:
                         draw_element = self.BLACK_PIECES[item-1]
                     print(draw_element, end='')
-                    if coloumn_i == (board_shape[1] - 1):
+                    if coloumn_i == (board_size[1] - 1):
                         print('\n\n', end='')
                         continue
                     print(self.spaces, end='')
@@ -193,27 +259,22 @@ class GameBox:
     def _get_commandline_input(self, text: str = "Your Move: "):
         return input(text)
 
-    def terminal_input(self, text: str = "Your Move: ") -> Tuple[int, int]:
+    def terminal_input(self, state: int = 0, def_text: str = "Your Move: ") -> Tuple[int, int]:
         """
          (x, y) | x : row [up and down]
                 | y : col [left and right]
         """
+        text: str = def_text
+        bad_text: str = '[# Bad Input] ' + def_text
+        if state > 0:
+            text = bad_text
         input_: str = self._get_commandline_input(text=text)
         output: Tuple[int, int] = self.process_input(input_)
         while output[0] == -1 or output[1] == -1:
-            input_: str = self._get_commandline_input(text=text)
+            input_: str = self._get_commandline_input(text=bad_text)
             output = self.process_input(input_)
         output = (output[0] - 1, output[1] - 1)
         return output
-
-
-# TODO:
-    # Add a "command line input" method for GameBox
-    # done
-    #  > receive infinite input until it satisfies process_input and adjust them for starting from 0 for A and 1
-    # done
-    # Add a "play move" function to the main file, uses the above method + the process_input function + checking for valid moves using the GameLogic
-    #  to make the player have to chose a move until it's a valid move and then play it (and maybe draw it afterwise)
 
 
 def main() -> None:
@@ -225,9 +286,10 @@ def main() -> None:
     MainWindow: GameBox = GameBox(rows=rows, coloumns=coloumns, spaces=' '*4)
 
     board: List[List[int]] = MainGame.get_board()
+    board_size: Tuple[int, int] = MainGame.get_board_size()
     whites: List[Tuple[int, int]] = MainGame.get_whites()
     blacks: List[Tuple[int, int]] = MainGame.get_blacks()
-    MainWindow.draw(board, whites, blacks)
+    MainWindow.draw(board, whites, blacks, board_size)
 
     print("=-+--> Moves should be formatted similar to \"A1\" or \"c 4\"")
     print("  |--> One alphabet and one number")
@@ -242,11 +304,14 @@ def main() -> None:
     for _ in range(0, 200):
         MainGame.do_valid_move(i_method_)
         board: List[List[int]] = MainGame.get_board()
+        board_size: Tuple[int, int] = MainGame.get_board_size()
         whites: List[Tuple[int, int]] = MainGame.get_whites()
         blacks: List[Tuple[int, int]] = MainGame.get_blacks()
-        MainWindow.draw(board, whites, blacks)
+        MainWindow.draw(board, whites, blacks, board_size)
     return
 
+
+# 死/四
 
 if __name__ == '__main__':
     main()
