@@ -1,4 +1,4 @@
-#!/bin/python3.11
+#!/bin/python3.10
 
 from typing import List, Tuple, Callable
 from numpy import typing as tp
@@ -7,6 +7,7 @@ import numpy as np
 import os
 import sys
 from termcolor import colored
+from copy import deepcopy
 
 
 class GameLogic:
@@ -147,7 +148,8 @@ class GameLogic:
         # - 1 c  + 1
         # Based on my references, even if a piece is 3 and has 2 others collapse into it,
         # it can at most turn into a four and explode like normal
-        for piece in self.four_pieces:
+        current_four_pieces: List[Tuple[int, int]] = deepcopy(self.four_pieces)
+        for piece in current_four_pieces:
             r: int = piece[0]
             c: int = piece[1]
 
@@ -228,8 +230,8 @@ class GameLogic:
                 self.white_pieces.remove(piece)
             else:
                 self.black_pieces.remove(piece)
-
-        self.four_pieces = []
+            self.four_pieces.remove(piece)
+        
         return
 
 
@@ -287,7 +289,7 @@ class GameBox:
         except IndexError:
             return False
 
-    def clear_screen(self):
+    def clear_screen(self) -> None:
         try:
             os.system(self.clear_command)
             return
@@ -295,7 +297,7 @@ class GameBox:
             print("[#] CANT CLEAR SCREEN, LAUNCH WITH --no-clear-screen")
             exit(0)
 
-    def no_clear_screen(self):
+    def no_clear_screen(self) -> None:
         print("\n\n")
 
     def _handle_improper_input(self) -> Tuple[int, int]:
@@ -372,6 +374,10 @@ class GameBox:
         return output
 
 
+# BUG : WHEN TWO PIECES EXPLODE INTO EACH OTHER, ONE OF THEM TURNS INTO A FAKE FOUR
+#  - VISUALLY ANNOYING AND GIVES WHOEVER'S COLOR IT BELONGS TO THE ABILITY TO PLACE ITSELF DOWN 
+
+
 def main(launch_args: List[str]) -> int:
     rows = 5
     coloumns = 5
@@ -389,10 +395,13 @@ def main(launch_args: List[str]) -> int:
     MainWindow.draw(board, whites, blacks, board_size)
 
     print("=-+--> Moves should be formatted similar to \"A1\" or \"c 4\"")
+    print("  |  ")
     print("  |--> One alphabet and one number")
+    print("  |  ")
     print("  |--> The numbers start from 1")
-    print("  |--> The order, beging uppercase, and spaces between or around")
-    print("  |--> does not matter.")
+    print("  |  ")
+    print("  |---> The order, beging uppercase, and spaces between or around")
+    print("  | \\-> does not matter.")
     print("  |")
     print("  |--> Press Control+C to quit")
     print(" -^- \n\n\n")

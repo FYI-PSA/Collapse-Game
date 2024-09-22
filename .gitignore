@@ -121,3 +121,6 @@ pyrightconfig.json
 .flake8
 tox.ini
 setup.cfg
+
+# Visual Studio Code configurations
+.vscode
