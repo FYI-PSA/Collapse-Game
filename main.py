@@ -115,6 +115,7 @@ class GameLogic:
         while not self.is_valid_move(pos):
             pos = get_input_method(1)
         self._do_move(pos)
+        return
 
     def _do_move(self, position: Tuple[int, int]) -> None:
         if self.first_move_white:
@@ -132,6 +133,7 @@ class GameLogic:
             # then it shouldn't change turns until that is finished
 
         self.white_turn = not self.white_turn  # Toggles between True and False
+        return
 
     def _add_to(self, position: Tuple[int, int]) -> int:
         self.board[position[0]][position[1]] += 1
@@ -376,6 +378,7 @@ class GameBox:
 
 # BUG : WHEN TWO PIECES EXPLODE INTO EACH OTHER, ONE OF THEM TURNS INTO A FAKE FOUR
 #  - VISUALLY ANNOYING AND GIVES WHOEVER'S COLOR IT BELONGS TO THE ABILITY TO PLACE ITSELF DOWN 
+# probably cause: the list removal during _spread()
 
 
 def main(launch_args: List[str]) -> int:
