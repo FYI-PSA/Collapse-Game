@@ -1,7 +1,7 @@
 # Collapse Game
  A game found on the internet commonly as "Chain Reaction" 
 
- My version is based on some mobile apps like ["2 Player Games: The Challenge"](https://play.google.com/store/apps/details?id=com.JindoBlu.TwoPlayerGamesChallenge) and ["1 2 3 4 Player Games"](https://play.google.com/store/apps/details?id=com.JindoBlu.FourPlayers) (On that app it's named "Color Wars")
+ My version is based on some mobile apps like ["2 Player Games: The Challenge"](https://play.google.com/store/apps/details?id=com.JindoBlu.TwoPlayerGamesChallenge) and ["1 2 3 4 Player Games"](https://play.google.com/store/apps/details?id=com.JindoBlu.FourPlayers) (On those apps it's named "Color Wars")
 
 ## Rules
  - First move for both players they can place their piece anywhere (except the other person's first piece)
