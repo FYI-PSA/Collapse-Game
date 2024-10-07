@@ -1,2 +1,2 @@
-numpy==1.23.5
-termcolor==2.5.0
+numpy>=1.21.5
+termcolor>=2.2.0

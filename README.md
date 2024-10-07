@@ -10,3 +10,17 @@
     - This action also makes the peice yours, so watch out for your enemey!
  - **You win once you capture all of your enemy's pieces**
 
+## Usage
+- Clone the project, install the requirements, and run the project: 
+    - Clone the repository and enter the directory:
+    ```sh
+    git clone https://github.com/FYI-PSA/Caesar-Solver.git && cd Caesar-Solver
+    ```
+    - Install the required python packages:
+    ```sh
+    python -m pip install -r ./requirements.txt
+    ```
+    - Then run the file:
+    ```sh
+    python main.py
+    ```
