@@ -22,10 +22,9 @@ class GameLogic:
         self.rows: int = rows
         self.coloumns: int = coloumns
         self.has_custom_board: bool = False
-        # Not sure what to do with this,
-        #  but it should be fairly easy to edit the main function
-        #  or import this file somewhere else
-        #  and give the GameLogic your own 2D array this way if you need to
+        # Not sure what to do with this
+        # Unfortunately it's currently broken
+        # Due to having no way of importing the pieces' colors into the game.
         _boardNumpyArray = tp.NDArray = np.array(board)
         if  (
                 _boardNumpyArray.dtype != 'object'
@@ -111,9 +110,8 @@ class GameLogic:
         # get_input_method needs to accept a parameter
         # that shows if it's the first time asking or second time
         if self.next_autotick:
-            sleep(0.25)
             self._spread()
-            sleep(0.25)
+            sleep(0.5)
             if self.four_pieces == []:
                 self.next_autotick = False
                 self.white_turn = not self.white_turn
@@ -167,9 +165,15 @@ class GameLogic:
             self.board[r][c] = 0
             self.four_pieces.remove(piece)
             if self.white_turn:
-                self.white_pieces.remove(piece)
+                try:
+                    self.white_pieces.remove(piece)
+                except ValueError:
+                    pass
             else:
-                self.black_pieces.remove(piece)
+                try:
+                    self.black_pieces.remove(piece)
+                except ValueError:
+                    pass
 
             # up
             r_2: int = r - 1
@@ -252,16 +256,20 @@ class GameBox:
                 print(self.spaces + self._ALPHABET_NAMING[row_i] + self.spaces + "|" + self.spaces, end='')
                 for coloumn_i, item in enumerate(row):
                     draw_element: str = ' O '
+                    piece_value: int = item - 1  # 1 2 3 4  -->  0 1 2 3
+                    if piece_value > 3:
+                        piece_value = 3
                     your_i: Tuple[int, int] = (row_i, coloumn_i)
                     if your_i in white_pieces:
-                        draw_element = colored(self.WHITE_PIECES[item-1], self.color_white)
+                        draw_element = colored(self.WHITE_PIECES[piece_value], self.color_white)
                     elif your_i in black_pieces:
-                        draw_element = colored(self.BLACK_PIECES[item-1], self.color_black)
+                        draw_element = colored(self.BLACK_PIECES[piece_value], self.color_black)
                     print(draw_element, end='')
                     if coloumn_i == (board_size[1] - 1):
                         print('\n\n', end='')
                         continue
                     print(self.spaces, end='')
+            sys.stdout.flush()
             return True
         except IndexError:
             return False
@@ -371,8 +379,6 @@ def main(launch_args: List[str]) -> int:
     coloumns = 5
     player_white_color = 'blue'
     player_black_color = 'yellow'
-    # custom_board: List[List[int]] = [[2 for j in range(5)] for i in range(5)]
-    # MainGame: GameLogic = GameLogic(rows=Rows, coloumns=coloumns, board=custom_board)
     MainGame: GameLogic = GameLogic(rows=rows, coloumns=coloumns)
     MainWindow: GameBox = GameBox(rows=rows, coloumns=coloumns, spaces=' '*4, color_white=player_white_color, color_black=player_black_color)
 
@@ -395,29 +401,40 @@ def main(launch_args: List[str]) -> int:
     i_method_: Callable = MainWindow.terminal_input
     game_run: bool = True
     winner_white: bool = True
+    ending_ticks: int = 6
     while game_run:
         clear_method_()
         MainWindow.draw(board, whites, blacks, board_size)
         turn: str = MainGame.get_turn()
-        if turn == 'White':
-            print(colored("Player 1's turn", player_white_color))
-        else:
-            print(colored("Player 2's turn", player_black_color))
+        if not MainGame.next_autotick:
+            if turn == 'White':
+                print(colored("Player 1's turn", player_white_color))
+            else:
+                print(colored("Player 2's turn", player_black_color))
         MainGame.do_valid_move(i_method_)
         board: List[List[int]] = MainGame.get_board()
         board_size: Tuple[int, int] = MainGame.get_board_size()
         whites: List[Tuple[int, int]] = MainGame.get_whites()
         blacks: List[Tuple[int, int]] = MainGame.get_blacks()
-        if whites == [] and not MainGame.first_move_white:
+        if (whites == [] and (not MainGame.first_move_white)):
             winner_white = False
             game_run = False
-        elif blacks == [] and not MainGame.first_move_black:
+        elif (blacks == [] and (not MainGame.first_move_black)):
             winner_white = True
             game_run = False
     clear_method_()
     MainWindow.draw(board, whites, blacks, board_size)
+    while ((ending_ticks > 0) and (MainGame.next_autotick)):
+        MainGame.do_valid_move(i_method_)
+        clear_method_()
+        board: List[List[int]] = MainGame.get_board()
+        board_size: Tuple[int, int] = MainGame.get_board_size()
+        whites: List[Tuple[int, int]] = MainGame.get_whites()
+        blacks: List[Tuple[int, int]] = MainGame.get_blacks()
+        ending_ticks = ending_ticks - 1
+        MainWindow.draw(board, whites, blacks, board_size)
     if winner_white:
-        print(colored(" [PLAYER 1] WINS ! ", player_black_color))
+        print(colored(" [PLAYER 1] WINS ! ", player_white_color))
     else:
         print(colored(" [PLAYER 2] WINS ! ", player_black_color))
     print('\n\n')
@@ -431,4 +448,5 @@ if __name__ == '__main__':
     try:
         exit(main(sys.argv))
     except KeyboardInterrupt:
+        print(colored("\n[#] Exiting game. Goodbye.\n\n", 'red'))
         exit(1)
