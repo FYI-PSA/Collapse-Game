@@ -6,8 +6,8 @@
 ## Rules
  - First move for both players they can place their piece anywhere (except the other person's first piece)
  - On all other moves a player must only place on their own already placed pieces
- - Once a peace reaches 4, it will explode into it's 4 neighbours (Up Left Right Down) and will add 1 to them
-    - This action also makes the peice yours, so watch out for your enemey!
+ - Once a piece reaches 4, it will explode into it's 4 neighbours (Up Left Right Down) and will add 1 to them
+    - This action also makes the piece yours, so watch out for your enemey!
  - **You win once you capture all of your enemy's pieces**
 
 ## Usage
