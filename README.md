@@ -14,7 +14,7 @@
 - Clone the project, install the requirements, and run the project: 
     - Clone the repository and enter the directory:
     ```sh
-    git clone https://github.com/FYI-PSA/Caesar-Solver.git && cd Caesar-Solver
+    git clone https://github.com/FYI-PSA/Collapse-Game.git && cd Collapse-Game
     ```
     - Install the required python packages:
     ```sh
