@@ -10,6 +10,13 @@ from termcolor import colored
 from copy import deepcopy
 
 
+# Just a headups:
+#   The "black pieces" and "white pieces" refer to play 2 and player 1.
+#   I didn't want to use "one" and "two" in the variable names
+#   So I just went with Chess terminology
+# Thanks for reading my code! more on: https://github.com/FYI-PSA/
+
+
 class GameLogic:
     def __init__(self, rows: int = 5, coloumns: int = 5, board: List[List[int]] = []) -> None:
         self.rows: int = rows
@@ -148,103 +155,71 @@ class GameLogic:
         # -1 r   + 1
         # + 1 r  + 1
         # - 1 c  + 1
+
+        # Side note:
         # Based on my references, even if a piece is 3 and has 2 others collapse into it,
         # it can at most turn into a four and explode like normal
+
         current_four_pieces: List[Tuple[int, int]] = deepcopy(self.four_pieces)
         for piece in current_four_pieces:
-            r: int = piece[0]
-            c: int = piece[1]
+            r: int = piece[0]  # row
+            c: int = piece[1]  # coloumn
+            self.board[r][c] = 0
+            self.four_pieces.remove(piece)
+            if self.white_turn:
+                self.white_pieces.remove(piece)
+            else:
+                self.black_pieces.remove(piece)
 
             # up
-            r_1: int = r + 1
-            c_1: int = c
-            if not (r_1 < 0 or r_1 >= self.rows):
-                self._add_to(position=(r_1, c_1))
-                if piece in self.white_pieces:
-                    if (r_1, c_1) in self.black_pieces:
-                        self.black_pieces.remove((r_1, c_1))
-                        self.white_pieces.append((r_1, c_1))
-                    elif not (r_1, c_1) in self.white_pieces:
-                        self.white_pieces.append((r_1, c_1))
-                else:  # If it's reached 4 and it's not white it has to be black
-                    if (r_1, c_1) in self.white_pieces:
-                        self.white_pieces.remove((r_1, c_1))
-                        self.black_pieces.append((r_1, c_1))
-                    elif not (r_1, c_1) in self.white_pieces:
-                        self.black_pieces.append((r_1, c_1))
-
-            # down
             r_2: int = r - 1
             c_2: int = c
             if not (r_2 < 0 or r_2 >= self.rows):
-                self._add_to(position=(r_2, c_2))
-                if piece in self.white_pieces:
-                    if (r_2, c_2) in self.black_pieces:
-                        self.black_pieces.remove((r_2, c_2))
-                        self.white_pieces.append((r_2, c_2))
-                    elif not (r_2, c_2) in self.white_pieces:
-                        self.white_pieces.append((r_2, c_2))
-                else:  # If it's reached 4 and it's not white it has to be black
-                    if (r_2, c_2) in self.white_pieces:
-                        self.white_pieces.remove((r_2, c_2))
-                        self.black_pieces.append((r_2, c_2))
-                    elif not (r_2, c_2) in self.white_pieces:
-                        self.black_pieces.append((r_2, c_2))
+                self._handle_spread_adding((r_2, c_2))
+
+            # down
+            r_1: int = r + 1
+            c_1: int = c
+            if not (r_1 < 0 or r_1 >= self.rows):
+                self._handle_spread_adding((r_1, c_1))
 
             # left
             r_3: int = r
             c_3: int = c - 1
             if not (c_3 < 0 or c_3 >= self.coloumns):
-                self._add_to(position=(r_3, c_3))
-                if piece in self.white_pieces:
-                    if (r_3, c_3) in self.black_pieces:
-                        self.black_pieces.remove((r_3, c_3))
-                        self.white_pieces.append((r_3, c_3))
-                    elif not (r_3, c_3) in self.white_pieces:
-                        self.white_pieces.append((r_3, c_3))
-                else:  # If it's reached 4 and it's not white it has to be black
-                    if (r_3, c_3) in self.white_pieces:
-                        self.white_pieces.remove((r_3, c_3))
-                        self.black_pieces.append((r_3, c_3))
-                    elif not (r_3, c_3) in self.white_pieces:
-                        self.black_pieces.append((r_3, c_3))
+                self._handle_spread_adding((r_3, c_3))
 
             # right
             r_4: int = r
             c_4: int = c + 1
             if not (c_4 < 0 or c_4 >= self.coloumns):
-                self._add_to(position=(r_4, c_4))
-                if piece in self.white_pieces:
-                    if (r_4, c_4) in self.black_pieces:
-                        self.black_pieces.remove((r_4, c_4))
-                        self.white_pieces.append((r_4, c_4))
-                    elif not (r_4, c_4) in self.white_pieces:
-                        self.white_pieces.append((r_4, c_4))
-                else:  # If it's reached 4 and it's not white it has to be black
-                    if (r_4, c_4) in self.white_pieces:
-                        self.white_pieces.remove((r_4, c_4))
-                        self.black_pieces.append((r_4, c_4))
-                    elif not (r_4, c_4) in self.white_pieces:
-                        self.black_pieces.append((r_4, c_4))
+                self._handle_spread_adding((r_4, c_4))
 
-            self.board[r][c] = 0
-            if self.white_turn:
-                self.white_pieces.remove(piece)
-            else:
-                self.black_pieces.remove(piece)
-            self.four_pieces.remove(piece)
-        
+        return
+
+    def _handle_spread_adding(self, position: Tuple[int, int]):
+        self._add_to(position=position)
+        if self.white_turn:
+            if (position in self.black_pieces):
+                self.black_pieces.remove(position)
+            if (position not in self.white_pieces):
+                self.white_pieces.append(position)
+        else:
+            if (position in self.white_pieces):
+                self.white_pieces.remove(position)
+            if (position not in self.black_pieces):
+                self.black_pieces.append(position)
         return
 
 
 class GameBox:
 
-    def __init__(self, rows: int, coloumns: int, spaces: str = '  ', color_1: str = 'blue', color_2: str = 'red') -> None:
+    def __init__(self, rows: int, coloumns: int, spaces: str = '  ', color_white: str = 'blue', color_black: str = 'red') -> None:
         self.spaces: str = spaces
         self.rows: int = rows
         self.coloumns: int = coloumns
-        self.color_1: str = color_1
-        self.color_2: str = color_2
+        self.color_white: str = color_white
+        self.color_black: str = color_black
         self._ALPHABET_NAMING: List[str] = [chr(alpha) for alpha in range(ord('A'), ord('A')+rows)]
         self.WHITE_PIECES: List[str] = [' I ', 'I I', 'III', 'I V']
         # self.BLACK_PIECES: List[str] = [' ⚀ ', ' ⚁ ', ' ⚂ ', ' ⚃ ']
@@ -279,9 +254,9 @@ class GameBox:
                     draw_element: str = ' O '
                     your_i: Tuple[int, int] = (row_i, coloumn_i)
                     if your_i in white_pieces:
-                        draw_element = colored(self.WHITE_PIECES[item-1], self.color_1)
+                        draw_element = colored(self.WHITE_PIECES[item-1], self.color_white)
                     elif your_i in black_pieces:
-                        draw_element = colored(self.BLACK_PIECES[item-1], self.color_2)
+                        draw_element = colored(self.BLACK_PIECES[item-1], self.color_black)
                     print(draw_element, end='')
                     if coloumn_i == (board_size[1] - 1):
                         print('\n\n', end='')
@@ -376,27 +351,7 @@ class GameBox:
         return output
 
 
-# BUG : WHEN TWO PIECES EXPLODE INTO EACH OTHER, ONE OF THEM TURNS INTO A FAKE FOUR
-#  - VISUALLY ANNOYING AND GIVES WHOEVER'S COLOR IT BELONGS TO THE ABILITY TO PLACE ITSELF DOWN 
-# probably cause: the list removal during _spread()
-
-
-def main(launch_args: List[str]) -> int:
-    rows = 5
-    coloumns = 5
-    p_1_c = 'blue'
-    p_2_c = 'yellow'
-    # custom_board: List[List[int]] = [[2 for j in range(5)] for i in range(5)]
-    # MainGame: GameLogic = GameLogic(rows=Rows, coloumns=coloumns, board=custom_board)
-    MainGame: GameLogic = GameLogic(rows=rows, coloumns=coloumns)
-    MainWindow: GameBox = GameBox(rows=rows, coloumns=coloumns, spaces=' '*4, color_1=p_1_c, color_2=p_2_c)
-
-    board: List[List[int]] = MainGame.get_board()
-    board_size: Tuple[int, int] = MainGame.get_board_size()
-    whites: List[Tuple[int, int]] = MainGame.get_whites()
-    blacks: List[Tuple[int, int]] = MainGame.get_blacks()
-    MainWindow.draw(board, whites, blacks, board_size)
-
+def show_rules() -> None:
     print("=-+--> Moves should be formatted similar to \"A1\" or \"c 4\"")
     print("  |  ")
     print("  |--> One alphabet and one number")
@@ -408,8 +363,26 @@ def main(launch_args: List[str]) -> int:
     print("  |")
     print("  |--> Press Control+C to quit")
     print(" -^- \n\n\n")
-
     input("--> Understood? ( Press \"Enter\" to play the game ) ")
+
+
+def main(launch_args: List[str]) -> int:
+    rows = 5
+    coloumns = 5
+    player_white_color = 'blue'
+    player_black_color = 'yellow'
+    # custom_board: List[List[int]] = [[2 for j in range(5)] for i in range(5)]
+    # MainGame: GameLogic = GameLogic(rows=Rows, coloumns=coloumns, board=custom_board)
+    MainGame: GameLogic = GameLogic(rows=rows, coloumns=coloumns)
+    MainWindow: GameBox = GameBox(rows=rows, coloumns=coloumns, spaces=' '*4, color_white=player_white_color, color_black=player_black_color)
+
+    board: List[List[int]] = MainGame.get_board()
+    board_size: Tuple[int, int] = MainGame.get_board_size()
+    whites: List[Tuple[int, int]] = MainGame.get_whites()
+    blacks: List[Tuple[int, int]] = MainGame.get_blacks()
+    MainWindow.draw(board, whites, blacks, board_size)
+
+    show_rules()
 
     should_clear: bool = True
     for string in launch_args:
@@ -427,9 +400,9 @@ def main(launch_args: List[str]) -> int:
         MainWindow.draw(board, whites, blacks, board_size)
         turn: str = MainGame.get_turn()
         if turn == 'White':
-            print(colored("Player 1's turn", p_1_c))
+            print(colored("Player 1's turn", player_white_color))
         else:
-            print(colored("Player 2's turn", p_2_c))
+            print(colored("Player 2's turn", player_black_color))
         MainGame.do_valid_move(i_method_)
         board: List[List[int]] = MainGame.get_board()
         board_size: Tuple[int, int] = MainGame.get_board_size()
@@ -444,14 +417,18 @@ def main(launch_args: List[str]) -> int:
     clear_method_()
     MainWindow.draw(board, whites, blacks, board_size)
     if winner_white:
-        print(colored(" [PLAYER 1] WINS ! ", p_1_c))
+        print(colored(" [PLAYER 1] WINS ! ", player_black_color))
     else:
-        print(colored(" [PLAYER 2] WINS ! ", p_2_c))
+        print(colored(" [PLAYER 2] WINS ! ", player_black_color))
     print('\n\n')
     return 0
 
 
 # 死/四
 
+
 if __name__ == '__main__':
-    exit(main(sys.argv))
+    try:
+        exit(main(sys.argv))
+    except KeyboardInterrupt:
+        exit(1)
