@@ -59,9 +59,6 @@ class GameLogic:
 
         return
 
-    def tick(self) -> None:
-        return
-
     def get_board(self) -> List[List[int]]:
         return self.board
 
@@ -260,6 +257,8 @@ class GameBox:
                     if piece_value > 3:
                         piece_value = 3
                     your_i: Tuple[int, int] = (row_i, coloumn_i)
+                    # I'm sorry if these lines give you complaints from your type checker
+                    # but it's fine as a string if you just give it colors.
                     if your_i in white_pieces:
                         draw_element = colored(self.WHITE_PIECES[piece_value], self.color_white)
                     elif your_i in black_pieces:
@@ -284,6 +283,15 @@ class GameBox:
 
     def no_clear_screen(self) -> None:
         print("\n\n")
+
+    def draw_tick(self, GameLogicObject: GameLogic, clear_function: Callable) -> None:
+        board: List[List[int]] = GameLogicObject.get_board()
+        board_size: Tuple[int, int] = GameLogicObject.get_board_size()
+        whites: List[Tuple[int, int]] = GameLogicObject.get_whites()
+        blacks: List[Tuple[int, int]] = GameLogicObject.get_blacks()
+        clear_function()
+        self.draw(board, whites, blacks, board_size)
+        return
 
     def _handle_improper_input(self) -> Tuple[int, int]:
         return (-1, -1)
@@ -382,62 +390,55 @@ def main(launch_args: List[str]) -> int:
     MainGame: GameLogic = GameLogic(rows=rows, coloumns=coloumns)
     MainWindow: GameBox = GameBox(rows=rows, coloumns=coloumns, spaces=' '*4, color_white=player_white_color, color_black=player_black_color)
 
-    board: List[List[int]] = MainGame.get_board()
-    board_size: Tuple[int, int] = MainGame.get_board_size()
-    whites: List[Tuple[int, int]] = MainGame.get_whites()
-    blacks: List[Tuple[int, int]] = MainGame.get_blacks()
-    MainWindow.draw(board, whites, blacks, board_size)
-
-    show_rules()
-
     should_clear: bool = True
     for string in launch_args:
         string = string.strip().lower()
         if string == '--no-clear-screen':
             should_clear = False
-
     clear_method_: Callable = (MainWindow.clear_screen if should_clear else MainWindow.no_clear_screen)
 
+    MainWindow.draw_tick(GameLogicObject=MainGame, clear_function=clear_method_)
+    show_rules()
+
     i_method_: Callable = MainWindow.terminal_input
+
     game_run: bool = True
     winner_white: bool = True
     ending_ticks: int = 6
+
     while game_run:
-        clear_method_()
-        MainWindow.draw(board, whites, blacks, board_size)
+        MainWindow.draw_tick(GameLogicObject=MainGame, clear_function=clear_method_)
+
         turn: str = MainGame.get_turn()
         if not MainGame.next_autotick:
             if turn == 'White':
                 print(colored("Player 1's turn", player_white_color))
             else:
                 print(colored("Player 2's turn", player_black_color))
+
         MainGame.do_valid_move(i_method_)
-        board: List[List[int]] = MainGame.get_board()
-        board_size: Tuple[int, int] = MainGame.get_board_size()
-        whites: List[Tuple[int, int]] = MainGame.get_whites()
-        blacks: List[Tuple[int, int]] = MainGame.get_blacks()
-        if (whites == [] and (not MainGame.first_move_white)):
+
+        # Check if someone has lost:
+        if (MainGame.get_whites() == [] and (not MainGame.first_move_white)):
             winner_white = False
             game_run = False
-        elif (blacks == [] and (not MainGame.first_move_black)):
+        elif (MainGame.get_blacks() == [] and (not MainGame.first_move_black)):
             winner_white = True
             game_run = False
-    clear_method_()
-    MainWindow.draw(board, whites, blacks, board_size)
+
+    # Continue for a few more ticks after the game is over for the potentially satisfying spread animation!
+    MainWindow.draw_tick(GameLogicObject=MainGame, clear_function=clear_method_)
     while ((ending_ticks > 0) and (MainGame.next_autotick)):
         MainGame.do_valid_move(i_method_)
-        clear_method_()
-        board: List[List[int]] = MainGame.get_board()
-        board_size: Tuple[int, int] = MainGame.get_board_size()
-        whites: List[Tuple[int, int]] = MainGame.get_whites()
-        blacks: List[Tuple[int, int]] = MainGame.get_blacks()
+        MainWindow.draw_tick(GameLogicObject=MainGame, clear_function=clear_method_)
         ending_ticks = ending_ticks - 1
-        MainWindow.draw(board, whites, blacks, board_size)
+
     if winner_white:
-        print(colored(" [PLAYER 1] WINS ! ", player_white_color))
+        print(colored(" [PLAYER 1] WINS ! ", player_white_color, attrs=['bold']))
     else:
-        print(colored(" [PLAYER 2] WINS ! ", player_black_color))
+        print(colored(" [PLAYER 2] WINS ! ", player_black_color, attrs=['bold']))
     print('\n\n')
+
     return 0
 
 
