@@ -65,10 +65,14 @@ class GameLogic:
     def get_board_size(self) -> Tuple[int, int]:
         return self.board_size
 
-    def get_turn(self) -> str:
+    def get_turn_word(self) -> str:
         if self.white_turn:
             return "White"
         return "Black"
+
+    def get_white_turn(self) -> bool:
+        """ Returns True if it's white's turn"""
+        return self.white_turn
 
     def get_whites(self) -> List[Tuple[int, int]]:
         return self.white_pieces
@@ -212,13 +216,27 @@ class GameLogic:
                 self.black_pieces.append(position)
         return
 
+    def check_gameover(self) -> int:
+        if (self.white_pieces == [] and (not self.first_move_white)):
+            return 2  # if black won
+        elif (self.black_pieces == [] and (not self.first_move_black)):
+            return 1  # if white won
+        else:
+            return 0  # if the game isn't over
 
-class GameBox:
+
+class ConsoleDisplay:
+
+    # I'm sorry if colored print lines give you complaints from your type checker
+    # It's fine as strings so long as you give it colors that the termcolor module recognises
 
     def __init__(self, rows: int, coloumns: int, spaces: str = '  ', color_white: str = 'blue', color_black: str = 'red') -> None:
         self.spaces: str = spaces
         self.rows: int = rows
         self.coloumns: int = coloumns
+        assert ((0 < coloumns) and (coloumns < 10))  # Ensure that the X axis doesn't go into double digits
+        assert ((0 < rows) and (rows < 27))  # Ensure that the Y axis fits in the English alphabet
+        assert ((rows + coloumns) > 2)  # Ensure there's at least a 1 by 2
         self.color_white: str = color_white
         self.color_black: str = color_black
         self._ALPHABET_NAMING: List[str] = [chr(alpha) for alpha in range(ord('A'), ord('A')+rows)]
@@ -227,9 +245,12 @@ class GameBox:
         self.BLACK_PIECES: List[str] = ['一 ', '二 ', '三 ', '四 ']
         if os.name == "nt":  # Is Windows
             self.clear_command = 'cls'
+            self.win_text_attributes = []
             os.system('color')
         else:
+            self.win_text_attributes = ['bold']
             self.clear_command = 'clear'
+        self.clear_method: Callable = self.no_clear_screen
         return
 
     def draw(self, gameboard: List[List[int]], white_pieces: List[Tuple[int, int]], black_pieces: List[Tuple[int, int]], board_size: Tuple[int, int]) -> bool:
@@ -238,7 +259,7 @@ class GameBox:
                 print(" BOARD DOESN'T MATCH WITH PROVIDED SIZES FOR THIS CLASS ")
                 raise IndexError
             numberings: List[str] = []
-            for num in range(0, board_size[0]):
+            for num in range(0, board_size[1]):
                 n: str = str(num + 1)
                 l: int = len(n)
                 if l == 1:
@@ -257,8 +278,6 @@ class GameBox:
                     if piece_value > 3:
                         piece_value = 3
                     your_i: Tuple[int, int] = (row_i, coloumn_i)
-                    # I'm sorry if these lines give you complaints from your type checker
-                    # but it's fine as a string if you just give it colors.
                     if your_i in white_pieces:
                         draw_element = colored(self.WHITE_PIECES[piece_value], self.color_white)
                     elif your_i in black_pieces:
@@ -284,13 +303,46 @@ class GameBox:
     def no_clear_screen(self) -> None:
         print("\n\n")
 
-    def draw_tick(self, GameLogicObject: GameLogic, clear_function: Callable) -> None:
+    def figure_clearing_method(self, should_clear: bool = True) -> None:
+        self.clear_method = (self.clear_screen if should_clear else self.no_clear_screen)
+        return
+
+    def draw_tick(self, GameLogicObject: GameLogic) -> None:
         board: List[List[int]] = GameLogicObject.get_board()
         board_size: Tuple[int, int] = GameLogicObject.get_board_size()
         whites: List[Tuple[int, int]] = GameLogicObject.get_whites()
         blacks: List[Tuple[int, int]] = GameLogicObject.get_blacks()
-        clear_function()
+        self.clear_method()
         self.draw(board, whites, blacks, board_size)
+        return
+
+    def show_rules(self) -> None:
+        print("=-+--> Moves should be formatted similar to \"A1\" or \"c 4\"")
+        print("  |  ")
+        print("  |--> One alphabet and one number")
+        print("  |  ")
+        print("  |--> The numbers start from 1")
+        print("  |  ")
+        print("  |---> The order, beging uppercase, and spaces between or around")
+        print("  | \\-> does not matter.")
+        print("  |")
+        print("  |--> Press Control+C to quit")
+        print(" -^- \n\n\n")
+        input("--> Understood? ( Press \"Enter\" to play the game ) ")
+        return
+
+    def give_win(self, white_won: bool) -> None:
+        if white_won:
+            print(colored(" [PLAYER 1] WINS ! ", self.color_white, attrs=self.win_text_attributes))
+        else:
+            print(colored(" [PLAYER 2] WINS ! ", self.color_black, attrs=self.win_text_attributes))
+
+    def display_turn(self, is_white_turn: bool, is_autotick: bool) -> None:
+        if not is_autotick:
+            if is_white_turn:
+                print(colored("Player 1's turn", self.color_white))
+            else:
+                print(colored("Player 2's turn", self.color_black))
         return
 
     def _handle_improper_input(self) -> Tuple[int, int]:
@@ -367,76 +419,62 @@ class GameBox:
         return output
 
 
-def show_rules() -> None:
-    print("=-+--> Moves should be formatted similar to \"A1\" or \"c 4\"")
-    print("  |  ")
-    print("  |--> One alphabet and one number")
-    print("  |  ")
-    print("  |--> The numbers start from 1")
-    print("  |  ")
-    print("  |---> The order, beging uppercase, and spaces between or around")
-    print("  | \\-> does not matter.")
-    print("  |")
-    print("  |--> Press Control+C to quit")
-    print(" -^- \n\n\n")
-    input("--> Understood? ( Press \"Enter\" to play the game ) ")
-
-
 def main(launch_args: List[str]) -> int:
     rows = 5
     coloumns = 5
+    # Here's a visualisation of a 3 x 3 matrix with the row and coloumn indices:
+    #  r1 c1  /  r1 c2  /  r1 c3
+    #  r2 c1  /  r2 c2  /  r2 c3
+    #  r3 c1  /  r3 c2  /  r3 c3
     player_white_color = 'blue'
     player_black_color = 'yellow'
+
     MainGame: GameLogic = GameLogic(rows=rows, coloumns=coloumns)
-    MainWindow: GameBox = GameBox(rows=rows, coloumns=coloumns, spaces=' '*4, color_white=player_white_color, color_black=player_black_color)
+    MainDisplay: ConsoleDisplay = ConsoleDisplay(rows=rows, coloumns=coloumns, spaces=' '*4, color_white=player_white_color, color_black=player_black_color)
 
     should_clear: bool = True
     for string in launch_args:
         string = string.strip().lower()
         if string == '--no-clear-screen':
             should_clear = False
-    clear_method_: Callable = (MainWindow.clear_screen if should_clear else MainWindow.no_clear_screen)
+    MainDisplay.figure_clearing_method(should_clear=should_clear)
 
-    MainWindow.draw_tick(GameLogicObject=MainGame, clear_function=clear_method_)
-    show_rules()
+    MainDisplay.draw_tick(GameLogicObject=MainGame)
+    MainDisplay.show_rules()
 
-    i_method_: Callable = MainWindow.terminal_input
+    i_method_: Callable = MainDisplay.terminal_input
 
     game_run: bool = True
     winner_white: bool = True
     ending_ticks: int = 6
 
     while game_run:
-        MainWindow.draw_tick(GameLogicObject=MainGame, clear_function=clear_method_)
+        MainDisplay.draw_tick(GameLogicObject=MainGame)
 
-        turn: str = MainGame.get_turn()
-        if not MainGame.next_autotick:
-            if turn == 'White':
-                print(colored("Player 1's turn", player_white_color))
-            else:
-                print(colored("Player 2's turn", player_black_color))
+        MainDisplay.display_turn(is_white_turn=MainGame.get_white_turn(), is_autotick=MainGame.next_autotick)
 
         MainGame.do_valid_move(i_method_)
 
-        # Check if someone has lost:
-        if (MainGame.get_whites() == [] and (not MainGame.first_move_white)):
-            winner_white = False
-            game_run = False
-        elif (MainGame.get_blacks() == [] and (not MainGame.first_move_black)):
-            winner_white = True
-            game_run = False
+        winner: int = MainGame.check_gameover()
+        match winner:
+            case 1:  # White win
+                game_run = False
+                winner_white = True
+            case 2:  # Black win
+                game_run = False
+                winner_white = False
+            case _:  # Game Continues
+                pass
 
     # Continue for a few more ticks after the game is over for the potentially satisfying spread animation!
-    MainWindow.draw_tick(GameLogicObject=MainGame, clear_function=clear_method_)
+    MainDisplay.draw_tick(GameLogicObject=MainGame)
     while ((ending_ticks > 0) and (MainGame.next_autotick)):
         MainGame.do_valid_move(i_method_)
-        MainWindow.draw_tick(GameLogicObject=MainGame, clear_function=clear_method_)
+        MainDisplay.draw_tick(GameLogicObject=MainGame)
         ending_ticks = ending_ticks - 1
 
-    if winner_white:
-        print(colored(" [PLAYER 1] WINS ! ", player_white_color, attrs=['bold']))
-    else:
-        print(colored(" [PLAYER 2] WINS ! ", player_black_color, attrs=['bold']))
+    MainDisplay.give_win(winner_white)
+
     print('\n\n')
 
     return 0
