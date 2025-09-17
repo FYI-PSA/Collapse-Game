@@ -328,7 +328,7 @@ class ConsoleDisplay:
         print("  |")
         print("  |--> Press Control+C to quit")
         print(" -^- \n\n\n")
-        input("--> Understood? ( Press \"Enter\" to play the game ) ")
+        input("=----> Understood? ( Press \"Enter\" to play the game ) ")
         return
 
     def give_win(self, white_won: bool) -> None:
