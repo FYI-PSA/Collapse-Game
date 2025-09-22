@@ -2,19 +2,31 @@
 
 from typing import List, Tuple, Callable
 from numpy import typing as tp
+from random import getrandbits
 from time import sleep
+
 import numpy as np
-import os
 import sys
-from termcolor import colored
+import os
+
 from copy import deepcopy
+
+try:
+    from termcolor import colored  # type: ignore[pyright]
+except ImportError:
+    print("[#] Python couldn't find the 'termcolor' library.")
+    print("[#] Running without colors.")
+    sleep(1)
+
+    def colored(text: str, color: str = 'white', attrs: List[str] = []):
+        return text
 
 
 # Just a headups:
-#   The "black pieces" and "white pieces" refer to play 2 and player 1.
+#   The "black pieces" and "white pieces" refer to respectively player 2 and player 1.
 #   I didn't want to use "one" and "two" in the variable names
 #   So I just went with Chess terminology
-# Thanks for reading my code! more on: https://github.com/FYI-PSA/
+# Thanks for reading my code! https://github.com/FYI-PSA/
 
 
 class GameLogic:
@@ -23,8 +35,9 @@ class GameLogic:
         self.coloumns: int = coloumns
         self.has_custom_board: bool = False
         # Not sure what to do with this
-        # Unfortunately it's currently broken
-        # Due to having no way of importing the pieces' colors into the game.
+        # Unfortunately it's currently unimplemented
+        # I don't want this in the game until someone asks
+        # For the pieces I could make 1-4 be white and 5-8 be black
         _boardNumpyArray = tp.NDArray = np.array(board)
         if  (
                 _boardNumpyArray.dtype != 'object'
@@ -56,6 +69,11 @@ class GameLogic:
 
         self.white_pieces: List[Tuple[int, int]] = []
         self.black_pieces: List[Tuple[int, int]] = []
+
+        try:
+            assert (self.rows > 1) and (self.coloumns > 1)
+        except AssertionError as assertion_error:
+            raise ValueError("The game board must at least be 2x2") from assertion_error
 
         return
 
@@ -225,12 +243,261 @@ class GameLogic:
             return 0  # if the game isn't over
 
 
+class AIPlayer:
+    def __init__(self) -> None:
+        self.board: List[List[int]] = []
+        self.pieces: List[Tuple[int, int]] = []
+        self.rows: int = 5
+        self.coloumns: int = 5
+        self.points_board: List[List[int]] = []
+
+    def _update_board(self, new_board: List[List[int]], ai_pieces: List[Tuple[int, int]]):
+        self.board = deepcopy(new_board)
+        self.pieces = deepcopy(ai_pieces)
+        self.rows = len(new_board)
+        self.coloumns = len(new_board[0])
+        self.points_board = [[0 if (i, j) in ai_pieces else -30 for j in range(self.coloumns)] for i in range(self.rows)]
+        # I believe the lower bound for points on a tile is -23
+        # Thus tiles unable to get picked will be -30
+
+    def _on_edge_marker(self, point: Tuple[int, int]) -> int:
+        marks: int = 0
+        # points on the edge give less than 4 children so they're not very suitable
+        if (point[0] == 0) or (point[0] == (self.rows - 1)):
+            marks += 1
+        if (point[1] == 0) or (point[1] == (self.coloumns - 1)):
+            marks += 1
+        return marks
+
+    def _has_three_neighbouring_bonus(self, point: Tuple[int, int], tile: int) -> int:
+        # the bonus only applies if you're a 3 and can explode onto an enemy
+        if tile != 3:
+            return 0
+        x, y = point
+        marks: int = 0
+        if x > 0:
+            if (self.board[x-1][y] == 3) and not ((x-1, y) in self.pieces):
+                marks += 1
+        if (x + 1) < self.coloumns:
+            if (self.board[x+1][y] == 3) and not ((x+1, y) in self.pieces):
+                marks += 1
+        if y > 0:
+            if (self.board[x][y-1] == 3) and not ((x, y-1) in self.pieces):
+                marks += 1
+        if (y + 1) < self.rows:
+            if (self.board[x][y+1] == 3) and not ((x, y+1) in self.pieces):
+                marks += 1
+        return marks
+
+    def _has_three_neighbouring_penalty(self, point: Tuple[int, int], tile: int) -> int:
+        # the penalty only applies if you aren't a 3 so you can't explode into the 3s
+        if tile == 3:
+            return 0
+        # this bonus applies only once
+        x, y = point
+        if x > 0:
+            if self.board[x-1][y] == 3:
+                return 1
+        if (x + 1) < self.coloumns:
+            if self.board[x+1][y] == 3:
+                return 1
+        if y > 0:
+            if self.board[x][y-1] == 3:
+                return 1
+        if (y + 1) < self.rows:
+            if self.board[x][y+1] == 3:
+                return 1
+        return 0
+
+    def _qualifies_for_corner(self, point: Tuple[int, int]) -> bool:
+        # neighbours should be only our colour or a 1
+        x, y = point
+        if x > 0:
+            if (self.board[x-1][y] not in self.pieces) and (self.board[x-1][y] != 1):
+                return True
+        if (x + 1) < self.coloumns:
+            if (self.board[x+1][y] not in self.pieces) and (self.board[x+1][y] != 1):
+                return True
+        if y > 0:
+            if (self.board[x][y-1] not in self.pieces) and (self.board[x][y-1] != 1):
+                return True
+        if (y + 1) < self.rows:
+            if (self.board[x][y+1] not in self.pieces) and (self.board[x][y+1] != 1):
+                return True
+        return False
+
+    def _can_make_corner_full(self, point: Tuple[int, int], tile: int) -> int:
+        # +2 if this is the corner to a 3, +1 if it's a corner to a 2, +0 if it's to a 1
+        # the corners we want are the enemies
+        # to make corner needs to not be 3
+        if tile == 3:
+            return 0
+        if not self._qualifies_for_corner(point):
+            return 0
+        # it doesn't get a reward if it's a bad move
+        marks: int = 0
+        x, y = point
+        target: Tuple[int, int] = (0, 0)
+        if (x > 0) and (y > 0):
+            # has top left corner
+            target = (x-1, y-1)
+            if target not in self.pieces:
+                marks += max(0, self.board[x-1][y-1] - 1)  # if it's empty it just adds 0
+        if (x > 0) and ((y + 1) < self.coloumns):
+            # has top right corner
+            target = (x-1, y+1)
+            if target not in self.pieces:
+                marks += max(0, self.board[x-1][y+1] - 1)  # if it's empty it just adds 0
+        if ((x + 1) < self.rows) and (y > 0):
+            # has bottom left corner
+            target = (x+1, y-1)
+            if target not in self.pieces:
+                marks += max(0, self.board[x+1][y-1] - 1)  # if it's empty it just adds 0
+        if ((x + 1) < self.rows) and ((y + 1) < self.coloumns):
+            # has bottom right corner
+            target = (x+1, y+1)
+            if target not in self.pieces:
+                marks += max(0, self.board[x+1][y+1] - 1)  # if it's empty it just adds 0
+        return marks
+
+    def _can_make_corner_burst(self, point: Tuple[int, int], tile: int) -> int:
+        # -2 if this is the corner to a 3, -1 if it's a corner to a 2, -0 if it's to a 1
+        # the corners we want are the enemies
+        # to burst needs to be 3
+        if tile != 3:
+            return 0
+        # I won't give the corner qualification to this because it'd still be a bad move.
+        marks: int = 0
+        x, y = point
+        target: Tuple[int, int] = (0, 0)
+        if (x > 0) and (y > 0):
+            # has top left corner
+            target = (x-1, y-1)
+            if target not in self.pieces:
+                marks += max(0, self.board[x-1][y-1] - 1)  # if it's empty it just adds 0
+        if (x > 0) and ((y + 1) < self.coloumns):
+            # has top right corner
+            target = (x-1, y+1)
+            if target not in self.pieces:
+                marks += max(0, self.board[x-1][y+1] - 1)  # if it's empty it just adds 0
+        if ((x + 1) < self.rows) and (y > 0):
+            # has bottom left corner
+            target = (x+1, y-1)
+            if target not in self.pieces:
+                marks += max(0, self.board[x+1][y-1] - 1)  # if it's empty it just adds 0
+        if ((x + 1) < self.rows) and ((y + 1) < self.coloumns):
+            # has bottom right corner
+            target = (x+1, y+1)
+            if target not in self.pieces:
+                marks += max(0, self.board[x+1][y+1] - 1)  # if it's empty it just adds 0
+        return marks
+
+    def _assign_scores(self) -> None:
+        for total_index in range(self.rows * self.coloumns):
+            x: int = total_index // self.coloumns
+            y: int = total_index % self.coloumns
+            position: Tuple[int, int] = (x, y)
+            if not (position in self.pieces):
+                continue
+            tile: int = self.board[x][y]
+            current_score: int = deepcopy(self.points_board[x][y])
+            # The way these marker functions work is that they either produce how many times the condition is met
+            # 0 if the condition isn't met for a point and a natural number from 1 to however many times it was met
+            # For example a point in the corner gets 2 on the edge marker
+            # While a point on just an edge gets 1
+            # A point in a corner gets -2 score. A point on only edges gets -1. A point in the middle gets 0
+            # Some markers (like the penalty for placing next to a 3) only apply once so they just return 0 or 1
+            # This also makes the code better looking than a bunch of conditions
+            current_score -= 1 * self._on_edge_marker(position)  # Can apply twice
+            current_score -= 3 * self._has_three_neighbouring_penalty(position, tile)  # Applices once
+            current_score += 7 * self._has_three_neighbouring_bonus(position, tile)  # Applies once
+            current_score += 1 * self._can_make_corner_full(position, tile)  # Applies differently based on tile
+            current_score -= 1 * self._can_make_corner_burst(position, tile)  # Applies differently based on tile
+            self.points_board[x][y] = deepcopy(current_score)
+
+    def _decide_move(self) -> Tuple[int, int]:
+        """
+         (x, y) | x : row [up and down]
+                | y : col [left and right]
+        """
+        if len(self.pieces) == 0:
+            best_place: Tuple[int, int] = (self.rows//2, self.coloumns//2)
+            if self.board[best_place[0]][best_place[1]] == 0:
+                return best_place
+            if (best_place[0] + 1) < self.coloumns:
+                if (best_place[1] + 1) < self.rows:
+                    return (best_place[0] + 1, best_place[1] + 1)
+                elif best_place[1] > 0:
+                    return (best_place[0] + 1, best_place[1] - 1)
+            if (best_place[1] + 1) < self.rows:
+                return (best_place[0] - 1, best_place[1] + 1)
+            elif best_place[1] > 0:
+                return (best_place[0] - 1, best_place[1] - 1)
+            # This piece of code was sponsered by the assertion at the end of the GameLogic init function :)
+        # This basically says that if the AI is starting,
+        # pick the middle piece, biased towards the bottom right on even-tile boards.
+        # Additional code to check for at least one of the corners aroud the starting position if the middle is taken
+        # (In case of a small board like a 2x2)
+
+        max_score: int = -32
+        best_tiles: List[Tuple[int, int]] = []
+        tile_values: List[int] = []
+        for total_index in range(self.rows * self.coloumns):
+            x: int = total_index // self.coloumns
+            y: int = total_index % self.coloumns
+            tile_position: Tuple[int, int] = (x, y)
+            if not (tile_position in self.pieces):
+                continue
+            tile_value: int = self.board[x][y]
+            tile_score: int = self.points_board[x][y]
+            if tile_score == max_score:
+                best_tiles.append(tile_position)
+                tile_values.append(tile_value)
+            elif tile_score > max_score:
+                max_score = tile_score
+                best_tiles.clear()
+                tile_values.clear()
+                best_tiles.append(tile_position)
+                tile_values.append(tile_value)
+        if len(best_tiles) == 1:
+            return best_tiles[0]
+        # If only 1 best piece, it gets the move.
+        selection_tiles: List[Tuple[int, int]] = []
+        for best_current_possible_value in [2, 1, 3]:
+            for index, tile_value in enumerate(tile_values):
+                if tile_value == best_current_possible_value:
+                    selection_tiles.append(best_tiles[index])
+            if len(selection_tiles) != 0:
+                break
+        if len(selection_tiles) == 1:
+            return selection_tiles[0]
+        # If having multiple best pieces of different ranks, the algorithm will do 2s as the best then 1s then 3s.
+        i_mid: int = (self.rows//2)
+        # if we have odd tiles, tile roof(count/2) with index floor(count/2) (what we get) is the mid.
+        # if tiles are even then the one on the right of the midpoint is preferred since the midpoint is split between 2 tiles in even counts.
+        # for verticals it'll be biased towards the tile below the midpoint.
+        j_mid: int = (self.coloumns//2)
+        minimum_distance: int = 10
+        best_tile: Tuple[int, int] = (0, 0)  # This section will be biased towards the first least-distance pick in the order of counting.
+        for position in selection_tiles:
+            distance: int = abs(i_mid - position[0]) + abs(j_mid - position[1])
+            if distance < minimum_distance:
+                minimum_distance = distance
+                best_tile = position
+        return best_tile
+
+    def play_turn(self, current_game_board: List[List[int]], ai_pieces: List[Tuple[int, int]]) -> Tuple[int, int]:
+        self._update_board(new_board=current_game_board, ai_pieces=ai_pieces)
+        self._assign_scores()
+        return self._decide_move()
+
+
 class ConsoleDisplay:
 
     # I'm sorry if colored print lines give you complaints from your type checker
     # It's fine as strings so long as you give it colors that the termcolor module recognises
 
-    def __init__(self, rows: int, coloumns: int, spaces: str = '  ', color_white: str = 'blue', color_black: str = 'red') -> None:
+    def __init__(self, rows: int, coloumns: int, spaces: str = '  ', color_white: str = 'blue', color_black: str = 'red', color_empty: str = 'dark_grey') -> None:
         self.spaces: str = spaces
         self.rows: int = rows
         self.coloumns: int = coloumns
@@ -239,17 +506,23 @@ class ConsoleDisplay:
         assert ((rows + coloumns) > 2)  # Ensure there's at least a 1 by 2
         self.color_white: str = color_white
         self.color_black: str = color_black
+        self.color_empty: str = color_empty
         self._ALPHABET_NAMING: List[str] = [chr(alpha) for alpha in range(ord('A'), ord('A')+rows)]
         self.WHITE_PIECES: List[str] = [' I ', 'I I', 'III', 'I V']
         # self.BLACK_PIECES: List[str] = [' ⚀ ', ' ⚁ ', ' ⚂ ', ' ⚃ ']
         self.BLACK_PIECES: List[str] = ['一 ', '二 ', '三 ', '四 ']
         if os.name == "nt":  # Is Windows
-            self.clear_command = 'cls'
-            self.win_text_attributes = []
-            os.system('color')
+            self.clear_command: str = 'cls'
+            self.win_text_attributes: List[str] = []
+            try:
+                os.system('color')
+            except OSError:
+                print('[#] The command prompt failed to set colors.')
+                print('[#] Running without colors.')
+                sleep(1)
         else:
-            self.win_text_attributes = ['bold']
-            self.clear_command = 'clear'
+            self.win_text_attributes: List[str] = ['bold']
+            self.clear_command: str = 'clear'
         self.clear_method: Callable = self.no_clear_screen
         return
 
@@ -282,6 +555,8 @@ class ConsoleDisplay:
                         draw_element = colored(self.WHITE_PIECES[piece_value], self.color_white)
                     elif your_i in black_pieces:
                         draw_element = colored(self.BLACK_PIECES[piece_value], self.color_black)
+                    else:
+                        draw_element = colored(draw_element, self.color_empty)
                     print(draw_element, end='')
                     if coloumn_i == (board_size[1] - 1):
                         print('\n\n', end='')
@@ -317,18 +592,23 @@ class ConsoleDisplay:
         return
 
     def show_rules(self) -> None:
-        print("=-+--> Moves should be formatted similar to \"A1\" or \"c 4\"")
-        print("  |  ")
-        print("  |--> One alphabet and one number")
-        print("  |  ")
-        print("  |--> The numbers start from 1")
-        print("  |  ")
-        print("  |---> The order, beging uppercase, and spaces between or around")
-        print("  | \\-> does not matter.")
-        print("  |")
-        print("  |--> Press Control+C to quit")
-        print(" -^- \n\n\n")
-        input("=----> Understood? ( Press \"Enter\" to play the game ) ")
+        print(r'=--+--> Moves should be formatted similar to   "A1"   "c 4"   "2 B"')
+        print(r"   |  ")
+        print(r"   |--> One alphabet and one number")
+        print(r"   |  ")
+        print(r"   |--> The numbers start from 1")
+        print(r"   |  ")
+        print(r"   |---> The order, beging uppercase, and spaces between or around")
+        print(r"   |   \-> does not matter.")
+        print(r"   |  ")
+        print(r"   |--> Press Control+C to quit")
+        print(r"   |  ")
+        print(r"   |  ")
+        print(r"   |  ")
+        print(r"   |  ")
+        print(r"  _^_ ")
+        print(r"   \\------> Understood?")
+        input(r'    \\------>  (Press "Enter" to play the game) ')
         return
 
     def give_win(self, white_won: bool) -> None:
@@ -433,27 +713,67 @@ def main(launch_args: List[str]) -> int:
     MainDisplay: ConsoleDisplay = ConsoleDisplay(rows=rows, coloumns=coloumns, spaces=' '*4, color_white=player_white_color, color_black=player_black_color)
 
     should_clear: bool = True
+    do_black_ai: bool = False
+    do_white_ai: bool = False
+    do_random_ai: bool = False
     for string in launch_args:
         string = string.strip().lower()
         if string == '--no-clear-screen':
             should_clear = False
+        elif string == '--player2-ai':
+            do_black_ai = True
+        elif string == '--player1-ai':
+            do_white_ai = True
+        elif string == '--ai':
+            do_random_ai = True
     MainDisplay.figure_clearing_method(should_clear=should_clear)
 
     MainDisplay.draw_tick(GameLogicObject=MainGame)
     MainDisplay.show_rules()
 
     i_method_: Callable = MainDisplay.terminal_input
+    if do_random_ai:
+        # I can also add 'or (do_black_ai and do_white_ai)' but I think it'll be fun to see how AIs play each other
+        do_black_ai = (getrandbits(1) == 1)
+        do_white_ai = not do_black_ai
+    white_ai: AIPlayer = AIPlayer()
+    black_ai: AIPlayer = AIPlayer()
+    ai_move: Tuple[int, int] = (0, 0)
+    # These won't do anything unless an AI is active from the launch params
 
     game_run: bool = True
     winner_white: bool = True
-    ending_ticks: int = 6
+    ending_ticks: int = 10
 
     while game_run:
         MainDisplay.draw_tick(GameLogicObject=MainGame)
 
         MainDisplay.display_turn(is_white_turn=MainGame.get_white_turn(), is_autotick=MainGame.next_autotick)
 
-        MainGame.do_valid_move(i_method_)
+        if MainGame.next_autotick:
+            MainGame.do_valid_move(i_method_)
+        elif MainGame.get_white_turn() and do_white_ai:
+            print("AI is thinking.", end='', flush=True)
+            sleep(0.333)
+            print('.', end='', flush=True)
+            sleep(0.333)
+            print('.', end='', flush=True)
+            sleep(0.333)
+            ai_move = white_ai.play_turn(current_game_board=MainGame.get_board(), ai_pieces=MainGame.get_whites())
+            dummy_input: Callable = lambda _: ai_move
+            MainGame.do_valid_move(dummy_input)
+        elif (not MainGame.get_white_turn()) and do_black_ai:
+            print("AI is thinking.", end='', flush=True)
+            sleep(0.333)
+            print('.', end='', flush=True)
+            sleep(0.333)
+            print('.', end='', flush=True)
+            sleep(0.333)
+            ai_move = black_ai.play_turn(current_game_board=MainGame.get_board(), ai_pieces=MainGame.get_blacks())
+            dummy_input: Callable = lambda _: ai_move
+            MainGame.do_valid_move(dummy_input)
+        else:
+            MainGame.do_valid_move(i_method_)
 
         winner: int = MainGame.check_gameover()
         match winner:
