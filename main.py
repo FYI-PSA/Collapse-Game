@@ -50,7 +50,7 @@ class GameLogic:
             self.board: List[List[int]] = board
             self.has_custom_board = True
         else:
-            self.board: List[List[int]] = [[0 for _j in range(coloumns)] for _i in range(rows)]
+            self.board: List[List[int]] = [[0]*coloumns for _ in range(rows)]
 
         self.board_size: Tuple[int, int] = (self.rows, self.coloumns)
 
@@ -241,6 +241,108 @@ class GameLogic:
             return 1  # if white won
         else:
             return 0  # if the game isn't over
+
+
+class BoardStateData:
+    # TODO:
+    # -- Expand these to work with any NxM grid if N and M are provided
+    #   -- Would let me use this in GameLogic for importing a board
+
+    def __init__(self,
+                 board: List[List[int]] = [[0]*5 for _ in range(5)],
+                 white_pieces: List[Tuple[int, int]] = [],
+                 black_pieces: List[Tuple[int, int]] = []) -> None:
+        """
+            Board starts as an empty 5x5 if not provided.
+        """
+        self.game_board = board
+        self.white_pieces = white_pieces
+        self.black_pieces = black_pieces
+
+    def set_board(self,
+                  board: List[List[int]] = [[0]*5 for _ in range(5)],
+                  white_pieces: List[Tuple[int, int]] = [],
+                  black_pieces: List[Tuple[int, int]] = []) -> None:
+        """
+            Board is cleared to an empty 5x5 if not provided.
+        """
+        self.game_board = board
+        self.white_pieces = white_pieces
+        self.black_pieces = black_pieces
+
+    def get_board(self) -> Tuple[List[List[int]], List[Tuple[int, int]], List[Tuple[int, int]]]:
+        """
+            Returns in order: The board, White's pieces, Black's pieces.
+        """
+        return (self.game_board, self.white_pieces, self.black_pieces)
+
+    def _base9_to_integer(self, b9number: int) -> int:
+        result: int = 0
+        right_most: int = 0
+        nine_pow: int = 1
+        for _ in range(25):
+            b9number, right_most = divmod(b9number, 10)
+            result += right_most * nine_pow
+            nine_pow *= 9
+        return result
+
+    def encode_board(self, board: List[List[int]] | None, white_pieces: List[Tuple[int, int]] | None) -> bytes:
+        """
+            Arguments provided are optional and in the order of  The board  and  White's pieces
+            If not provided, they'll use what's saved on this instance.
+            Saves the board as a 25 digit base9 number, being at most 10 bytes
+        """
+        # Don't need to take black because if it's a piece on the board and not white, it'll just be black.
+        if board is None:
+            data_board: List[List[int]] = self.game_board
+        else:
+            data_board: List[List[int]] = board
+        if white_pieces is None:
+            data_white: List[Tuple[int, int]] = self.white_pieces
+        else:
+            data_white: List[Tuple[int, int]] = white_pieces
+
+        number_string: int = 0
+        significance: int = 1
+        for indx in range(25):
+            i: int = indx // 5
+            j: int = indx % 5
+            new_part: int = data_board[i][j]
+            if (new_part > 0) and ((i, j) not in data_white):
+                new_part += 4
+            # no pieces: 0
+            # white pieces: 1-4
+            # black pieces: 5-8
+            new_part *= significance
+            significance *= 10
+            number_string += new_part
+        data: bytes = self._base9_to_integer(number_string).to_bytes(byteorder='big', length=10)
+        return data
+
+    def decode_board(self, board_10bytes: bytes) -> Tuple[List[List[int]], List[Tuple[int, int]], List[Tuple[int, int]]]:
+        """
+            Takes a 10 byte long encoded board and returns:
+                The board, White's pieces, Black's pieces
+        """
+        board: List[List[int]] = [[0]*5 for _ in range(5)]
+        white_pieces: List[Tuple[int, int]] = []
+        black_pieces: List[Tuple[int, int]] = []
+        encoded_num: int = int.from_bytes(board_10bytes, byteorder='big')
+        data: List[int] = [0]*25
+        for indx in range(25):
+            if encoded_num == 0:
+                continue
+            encoded_num, digit = divmod(encoded_num, 9)
+            data[indx] = digit
+        for indx, digit in enumerate(data):
+            i, j = divmod(indx, 5)
+            if digit > 4:
+                black_pieces.append((i, j))
+                board[i][j] = digit - 4
+            elif digit > 0:
+                white_pieces.append((i, j))
+                board[i][j] = digit
+        return (board, white_pieces, black_pieces)
 
 
 class AIPlayer:
@@ -508,6 +610,13 @@ class ConsoleDisplay:
         self.color_black: str = color_black
         self.color_empty: str = color_empty
         self._ALPHABET_NAMING: List[str] = [chr(alpha) for alpha in range(ord('A'), ord('A')+rows)]
+        # TODO:
+        # -- MOST IMPORTANTLY: Start working on an actual window UI instead of terminal UI
+        # - Make these styles options
+        # - Add a few more options with 1234 and ۱۲۳۴
+        # - Make players be able to chose with program arguments
+        # - Add an "Unknwon mode" where both players run the same style and same colour
+        # - Add a "Retro mode" where both players run only 1234 and IIIIIIIV and no colours. (For Powershell)
         self.WHITE_PIECES: List[str] = [' I ', 'I I', 'III', 'I V']
         # self.BLACK_PIECES: List[str] = [' ⚀ ', ' ⚁ ', ' ⚂ ', ' ⚃ ']
         self.BLACK_PIECES: List[str] = ['一 ', '二 ', '三 ', '四 ']
@@ -726,6 +835,7 @@ def main(launch_args: List[str]) -> int:
             do_white_ai = True
         elif string == '--ai':
             do_random_ai = True
+
     MainDisplay.figure_clearing_method(should_clear=should_clear)
 
     MainDisplay.draw_tick(GameLogicObject=MainGame)
@@ -749,6 +859,9 @@ def main(launch_args: List[str]) -> int:
         MainDisplay.draw_tick(GameLogicObject=MainGame)
 
         MainDisplay.display_turn(is_white_turn=MainGame.get_white_turn(), is_autotick=MainGame.next_autotick)
+
+        # TODO:
+        # -- Move the "AI is thinking" to a proper function in ConsoleDisplay
 
         if MainGame.next_autotick:
             MainGame.do_valid_move(i_method_)
